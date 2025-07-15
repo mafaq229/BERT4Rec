@@ -1,10 +1,12 @@
+import os
 import random
 from typing import List
 
 import pandas as pd
 import torch
-from config import MASK, MASKING_RATIO, MAX_SEQ_LEN, PAD
 from torch.utils.data import Dataset
+
+from config import DATA_CONFIG, MASK, PAD
 
 
 class Bert4RecDataset(Dataset):
@@ -27,16 +29,15 @@ class Bert4RecDataset(Dataset):
     def __init__(
         self,
         ratings_df,
-        groupby_col="user_id",
-        data_col="movie_mapped",
-        target_column="rating",
-        timestamp_col="timestamp",
-        train_history: int = MAX_SEQ_LEN,
-        valid_history: int = 5,
+        groupby_col=DATA_CONFIG["user_col"],
+        data_col=DATA_CONFIG["item_col"],
+        timestamp_col=DATA_CONFIG["timestamp_col"],
+        positive_review_threshold=DATA_CONFIG["positive_review_threshold"],
+        train_history: int = DATA_CONFIG["max_seq_len"],
+        valid_history: int = DATA_CONFIG["valid_history"],
         padding_mode: str = "right",
         split_mode: str = "train",
-        target_threshold=3,
-        masking_ratio=MASKING_RATIO,
+        masking_ratio=DATA_CONFIG["masking_ratio"],
     ):
         """
         Initialize the BERT4Rec dataset.
@@ -45,13 +46,12 @@ class Bert4RecDataset(Dataset):
             ratings_df (pd.DataFrame): DataFrame containing user-item interactions
             groupby_col (str): Column name for user IDs
             data_col (str): Column name for item (movie in our case) IDs
-            target_column (str): Column name for ratings/interaction values
             timestamp_col (str): Column name for interaction timestamps
             train_history (int): Maximum length of input sequences (200 as per the paper)
             valid_history (int): Number of items to reserve for validation/testing
             padding_mode (str): Whether to pad sequences from 'left' or 'right'
             split_mode (str): One of ['train', 'valid', 'test']
-            target_threshold (float): Minimum rating threshold to consider an interaction positive
+            positive_review_threshold (bool): Whether to consider only positive reviews
             masking_ratio (float): Probability of masking an item in the sequence (0.2 as per the paper)
         """
         super().__init__()
@@ -59,19 +59,20 @@ class Bert4RecDataset(Dataset):
         self.ratings_df = ratings_df
         self.groupby_col = groupby_col
         self.data_col = data_col
+        self.timestamp_col = timestamp_col
         self.train_history = train_history
         self.valid_history = valid_history
         self.padding_mode = padding_mode
         self.split_mode = split_mode
-        self.target_column = target_column
-        self.target_threshold = target_threshold
-        self.timestamp_col = timestamp_col
+        self.positive_review_threshold = positive_review_threshold
 
-        # Filter interactions to focus on items the user actually liked
-        # This is crucial as we want to predict items users will positively interact with
-        if self.target_column:
+        # intuitively, introducing this means that we want to predict which next item user will see and like.
+        # without it, we are simply predicting which item user watches.
+        # in actual systems, we should have this but not needed in our case
+        if self.positive_review_threshold:
             self.ratings_df = self.ratings_df[
-                self.ratings_df[self.target_column] >= self.target_threshold
+                self.ratings_df[DATA_CONFIG["rating_col"]]
+                >= DATA_CONFIG["target_threshold"]
             ]
             self.ratings_df.reset_index(inplace=True)
 
@@ -125,8 +126,13 @@ class Bert4RecDataset(Dataset):
             # So, we only sample up to (total interactions - valid_history).
             # This encourages the model to learn from various points in the user's history, not just the end.
             max_end = grouped_ratings.shape[0] - self.valid_history
-            # Randomly select an end index for the training sequence, but ensure at least 10 interactions are included.
-            end_ix = random.randint(10, max_end if max_end >= 10 else 10)
+            # Randomly select an end index for the training sequence, but ensures at least N real interactions are included if len > N.
+            end_ix = random.randint(
+                DATA_CONFIG["min_real_interactions"],
+                max_end
+                if max_end >= (DATA_CONFIG["min_real_interactions"])
+                else (DATA_CONFIG["min_real_interactions"]),
+            )
         elif self.split_mode in ["valid", "test"]:
             # For validation and test, we use the most recent interactions (the full available sequence).
             end_ix = grouped_ratings.shape[0]
@@ -200,7 +206,7 @@ class Bert4RecDataset(Dataset):
                 - source: Input sequence with masked items
                 - target: Original sequence (ground truth)
                 - source_mask: Attention mask for source sequence
-                - target_mask: Attention mask for target sequence
+                - target_mask: Attention mask for target sequence (same as source mask, since both are padded with PAD)
         """
         # Get user's interaction sequence
         user = self.users[idx]
@@ -243,3 +249,14 @@ class Bert4RecDataset(Dataset):
     def __len__(self):
         """Return the number of users in the dataset."""
         return len(self.users)
+
+
+if __name__ == "__main__":
+    dataset_name = "ml-1m"  # look for keys in DATASETS in config.py
+    dataset_path = os.path.join(
+        DATA_CONFIG["data_dir"], dataset_name, DATA_CONFIG["processed_ratings_file"]
+    )
+    processed_ratings_df = pd.read_csv(dataset_path)
+
+    dataset = Bert4RecDataset(processed_ratings_df)
+    print(dataset[0].keys())

@@ -4,21 +4,25 @@ import zipfile
 
 import pandas as pd
 import requests
-from config import save_path
+
+from config import DATA_SAVE_PATH, DATASETS, START
 
 
 class ML1MDataset:
-    def __init__(self, save_path):
-        self.download_url = "https://files.grouplens.org/datasets/movielens/ml-1m.zip"
-        self.data_dir = "data/bert4rec"
+    def __init__(self, dataset_url, dataset_name):
+        self.download_url = dataset_url
+        self.dataset_name = dataset_name
+        self.data_dir = "data"
         os.makedirs(self.data_dir, exist_ok=True)
-        self.zip_path = os.path.join(self.data_dir, "ml-1m.zip")
-        self.dataset_path = os.path.join(self.data_dir, "ml-1m")
-        self.save_path = save_path
+        self.zip_path = os.path.join(self.data_dir, f"{dataset_name}.zip")
+        self.dataset_path = os.path.join(self.data_dir, dataset_name)
+        self.data_save_path = DATA_SAVE_PATH
 
     def download_and_extract(self):
         # check if the files are already downloaded
-        if os.path.exists(os.path.join(self.data_dir, "ml-1m", "ratings.dat")):
+        if os.path.exists(
+            os.path.join(self.data_dir, self.dataset_name, "ratings.dat")
+        ):
             return
         # downloading the zip file
         response = requests.get(self.download_url)
@@ -58,7 +62,7 @@ class ML1MDataset:
                 )
                 # 0 and 1 are reserved for special tokens for Padding and Masking hence we start indexing from 2
                 movies_id_mapping = {
-                    k: i + 2
+                    k: i + START
                     for i, k in enumerate(sorted(list(movies["movie_id"].unique())))
                 }
             if file == "users.dat":
@@ -68,26 +72,38 @@ class ML1MDataset:
                 )
 
         movies["movie_mapped"] = movies["movie_id"].map(lambda x: movies_id_mapping[x])
-        ratings["movie_mapped"] = ratings["movie_id"].map(lambda x: movies_id_mapping[x])
+        ratings["movie_mapped"] = ratings["movie_id"].map(
+            lambda x: movies_id_mapping[x]
+        )
         inverse_movies_id_mapping = {v: k for k, v in movies_id_mapping.items()}
 
-        os.makedirs(os.path.join(self.save_path, "data"), exist_ok=True)
+        os.makedirs(os.path.join(self.data_save_path, self.dataset_name), exist_ok=True)
         ratings.to_csv(
-            os.path.join(self.save_path, "data", "ratings_mapped.csv"), index=False
+            os.path.join(self.data_save_path, self.dataset_name, "ratings_mapped.csv"),
+            index=False,
         )
         movies.to_csv(
-            os.path.join(self.save_path, "data", "movies_mapped.csv"), index=False
+            os.path.join(self.data_save_path, self.dataset_name, "movies_mapped.csv"),
+            index=False,
         )
-        users.to_csv(os.path.join(self.save_path, "data", "users.csv"), index=False)
+        users.to_csv(
+            os.path.join(self.data_save_path, self.dataset_name, "users.csv"),
+            index=False,
+        )
 
         with open(
-            os.path.join(self.save_path, "data", "new_to_old_movie_id_mapping.pkl"),
+            os.path.join(
+                self.data_save_path,
+                self.dataset_name,
+                "new_to_old_movie_id_mapping.pkl",
+            ),
             "wb",
         ) as fp:
             pickle.dump(inverse_movies_id_mapping, fp)
 
 
 if __name__ == "__main__":
-    dataset = ML1MDataset(save_path=save_path)
+    ml_dataset = "ml-1m"  # look for keys in DATASETS in config.py
+    dataset = ML1MDataset(dataset_url=DATASETS[ml_dataset], dataset_name=ml_dataset)
     dataset.download_and_extract()
     dataset.preprocess()

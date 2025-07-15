@@ -10,3 +10,7 @@ wheels/
 .venv
 
 data/
+arc/
+papers/
+
+*.DS_Store
