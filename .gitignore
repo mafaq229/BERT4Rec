@@ -12,6 +12,7 @@ wheels/
 data/
 arc/
 papers/
+artifacts/
 
 *.DS_Store
 .mypy_cache/
