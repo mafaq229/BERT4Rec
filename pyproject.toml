@@ -13,3 +13,17 @@ dependencies = [
     "torch>=2.7.1",
     "tqdm>=4.67.1",
 ]
+
+
+[[tool.uv.index]]
+name     = "pytorch-cu126"
+url      = "https://download.pytorch.org/whl/cu126"
+explicit = true   # only used when we point to it in [tool.uv.sources]
+
+
+# Platform‑specific source rule
+[tool.uv.sources]
+# Use CUDA wheels on Windows & Linux; fall back to PyPI (CPU/MPS) everywhere else.
+torch = [
+  { index = "pytorch-cu126", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]

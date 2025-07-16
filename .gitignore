@@ -14,3 +14,4 @@ arc/
 papers/
 
 *.DS_Store
+.mypy_cache/
