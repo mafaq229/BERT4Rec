@@ -75,17 +75,18 @@ MODEL_CONFIG = {
 TRAINING_CONFIG = {
     # Optimization parameters (from BERT4Rec paper)
     'learning_rate': 0.0001,
+    'adam_betas': (0.9, 0.98),
     'batch_size': 256,
-    'num_epochs': 200,
-    'warmup_steps': 100,
+    'num_epochs': 2000,
+    # 'warmup_steps': 100,
     'weight_decay': 0.01,
+    'clip_grad_norm': 5.0, # as per BERT4Rec paper (can try 1.0 as well)
     
-    # Learning rate scheduling
-    'scheduler_type': 'cosine',   # 'cosine' or 'linear' or 'constant'
-    'min_lr': 1e-6,              # Minimum learning rate for cosine scheduler
+    # Linear learning rate scheduling (as per BERT4Rec paper)
+    'min_lr': 1e-6,              # Minimum learning rate for linear scheduler
     
     # Early stopping
-    'patience': 10,              # Early stopping patience
+    'patience': 50,              # Early stopping patience
     'min_delta': 0.001,          # Minimum improvement for early stopping
     
     # Validation parameters
@@ -99,6 +100,9 @@ TRAINING_CONFIG = {
     
     # Loss computation
     'label_smoothing': 0.1,      # Label smoothing for cross-entropy loss
+    
+    # save_path
+    'model_save_dir': 'artifacts/model'
 }
 
 # =============================================================================
